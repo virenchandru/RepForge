@@ -67,6 +67,17 @@ class AuthenticationTest extends TestCase
             ->assertJsonPath('email', 'login@example.com');
     }
 
+    public function test_api_accepts_flutter_web_preflight_requests(): void
+    {
+        $this->call('OPTIONS', '/api/login', [], [], [], [
+            'HTTP_ORIGIN' => 'http://localhost:54321',
+            'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'POST',
+            'HTTP_ACCESS_CONTROL_REQUEST_HEADERS' => 'content-type,accept',
+        ])
+            ->assertNoContent()
+            ->assertHeader('Access-Control-Allow-Origin', '*');
+    }
+
     public function test_user_cannot_login_with_invalid_credentials(): void
     {
         User::factory()->create([
