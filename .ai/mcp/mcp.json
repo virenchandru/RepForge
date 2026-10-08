@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "laravel-boost": {
+      "command": "/usr/bin/php",
+      "args": [
+        "/home/viren/Documents/Kuliah/RPL/project_rpl/backend/artisan",
+        "boost:mcp"
+      ]
+    }
+  }
+}
