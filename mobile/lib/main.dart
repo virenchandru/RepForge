@@ -43,6 +43,28 @@ class _RepForgeAppState extends State<RepForgeApp> {
     });
   }
 
+  Future<WorkoutEntry> _onWorkoutLogged({
+    required String exerciseName,
+    required int sets,
+    required int reps,
+    double? weightKg,
+  }) {
+    final token = _token;
+    if (token == null) {
+      return Future.error(
+        const AuthApiException('Sesi berakhir. Masuk kembali untuk mencatat.'),
+      );
+    }
+
+    return _authApi.createWorkoutEntry(
+      token: token,
+      exerciseName: exerciseName,
+      sets: sets,
+      reps: reps,
+      weightKg: weightKg,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -89,7 +111,11 @@ class _RepForgeAppState extends State<RepForgeApp> {
       ),
       home: _user == null
           ? AuthScreen(api: _authApi, onAuthenticated: _onAuthenticated)
-          : HomeScreen(user: _user!, onLogout: _onLogout),
+          : HomeScreen(
+              user: _user!,
+              onLogout: _onLogout,
+              onWorkoutLogged: _onWorkoutLogged,
+            ),
     );
   }
 }
