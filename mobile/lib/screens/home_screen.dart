@@ -7,17 +7,73 @@ const _muted = Color(0xFF777A73);
 const _lime = Color(0xFFC9F36A);
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({required this.user, required this.onLogout, super.key});
+  const HomeScreen({
+    required this.user,
+    required this.onLogout,
+    required this.onWorkoutLogged,
+    super.key,
+  });
 
   final AppUser user;
   final Future<void> Function() onLogout;
+  final Future<WorkoutEntry> Function({
+    required String exerciseName,
+    required int sets,
+    required int reps,
+    double? weightKg,
+  })
+  onWorkoutLogged;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _workoutFormKey = GlobalKey<FormState>();
+  final _exerciseController = TextEditingController();
+  final _setsController = TextEditingController(text: '3');
+  final _repsController = TextEditingController(text: '10');
+  final _weightController = TextEditingController();
   bool _isLoggingOut = false;
+  bool _isSavingWorkout = false;
+
+  @override
+  void dispose() {
+    _exerciseController.dispose();
+    _setsController.dispose();
+    _repsController.dispose();
+    _weightController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveWorkout() async {
+    if (!_workoutFormKey.currentState!.validate() || _isSavingWorkout) return;
+
+    setState(() => _isSavingWorkout = true);
+    try {
+      final weight = _weightController.text.trim();
+      final entry = await widget.onWorkoutLogged(
+        exerciseName: _exerciseController.text.trim(),
+        sets: int.parse(_setsController.text),
+        reps: int.parse(_repsController.text),
+        weightKg: weight.isEmpty ? null : double.parse(weight),
+      );
+      if (!mounted) return;
+      _workoutFormKey.currentState?.reset();
+      _exerciseController.clear();
+      _weightController.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${entry.exerciseName} berhasil dicatat.')),
+      );
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) setState(() => _isSavingWorkout = false);
+    }
+  }
 
   Future<void> _logout() async {
     setState(() => _isLoggingOut = true);
@@ -80,6 +136,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 30),
                   _accountCard(),
+                  const SizedBox(height: 28),
+                  const Text(
+                    'CATAT LATIHAN',
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _workoutForm(),
                   const SizedBox(height: 18),
                   Container(
                     padding: const EdgeInsets.all(20),
@@ -241,5 +309,114 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Widget _workoutForm() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFEBEBE5)),
+      ),
+      child: Form(
+        key: _workoutFormKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _exerciseController,
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: 'Nama latihan',
+                hintText: 'Contoh: Squat',
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Nama latihan wajib diisi.';
+                }
+                if (value.trim().length > 120) {
+                  return 'Maksimal 120 karakter.';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _setsController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Set'),
+                    validator: (value) => _positiveIntegerError(value, 'Set'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _repsController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Repetisi'),
+                    validator: (value) =>
+                        _positiveIntegerError(value, 'Repetisi'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _weightController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Beban (kg, opsional)',
+                hintText: 'Kosongkan untuk latihan berat badan',
+              ),
+              validator: (value) {
+                final text = value?.trim() ?? '';
+                if (text.isEmpty) return null;
+                final weight = double.tryParse(text);
+                if (weight == null || weight < 0 || weight > 999999.99) {
+                  return 'Masukkan beban 0 kg atau lebih.';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: _isSavingWorkout ? null : _saveWorkout,
+              style: FilledButton.styleFrom(
+                backgroundColor: _ink,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: _isSavingWorkout
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _lime,
+                      ),
+                    )
+                  : const Text('Simpan latihan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _positiveIntegerError(String? value, String label) {
+    final number = int.tryParse(value?.trim() ?? '');
+    if (number == null || number < 1 || number > 1000) {
+      return '$label harus antara 1 dan 1000.';
+    }
+    return null;
   }
 }

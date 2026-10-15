@@ -25,6 +25,42 @@ class AuthResult {
   final String token;
 }
 
+class WorkoutEntry {
+  const WorkoutEntry({
+    required this.id,
+    required this.exerciseName,
+    required this.sets,
+    required this.reps,
+    required this.weightKg,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String exerciseName;
+  final int sets;
+  final int reps;
+  final double? weightKg;
+  final DateTime createdAt;
+
+  factory WorkoutEntry.fromJson(Map<String, dynamic> json) {
+    final rawWeight = json['weight_kg'];
+    final weight = rawWeight == null
+        ? null
+        : rawWeight is num
+        ? rawWeight.toDouble()
+        : double.parse(rawWeight as String);
+
+    return WorkoutEntry(
+      id: json['id'] as int,
+      exerciseName: json['exercise_name'] as String,
+      sets: json['sets'] as int,
+      reps: json['reps'] as int,
+      weightKg: weight,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+}
+
 class AuthApiException implements Exception {
   const AuthApiException(this.message);
 
@@ -115,6 +151,46 @@ class AuthApi {
         _errorMessage(_decodeBody(response), response.statusCode),
       );
     }
+  }
+
+  Future<WorkoutEntry> createWorkoutEntry({
+    required String token,
+    required String exerciseName,
+    required int sets,
+    required int reps,
+    double? weightKg,
+  }) async {
+    final payload = <String, dynamic>{
+      'exercise_name': exerciseName,
+      'sets': sets,
+      'reps': reps,
+      'weight_kg': weightKg,
+    };
+    final response = await _send(
+      () => _client.post(
+        Uri.parse('$_baseUrl/workouts'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ),
+    );
+    final body = _decodeBody(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_errorMessage(body, response.statusCode));
+    }
+
+    final entry = body['data'];
+    if (entry is! Map<String, dynamic>) {
+      throw const AuthApiException(
+        'Respons server tidak sesuai. Periksa endpoint latihan.',
+      );
+    }
+
+    return WorkoutEntry.fromJson(entry);
   }
 
   Future<http.Response> _send(Future<http.Response> Function() request) async {
