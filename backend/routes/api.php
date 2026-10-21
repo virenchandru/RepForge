@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\WorkoutEntryController;
+use App\Http\Controllers\WorkoutSessionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,4 +20,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/users', [AuthController::class, 'users']);
     Route::post('/workouts', [WorkoutEntryController::class, 'store']);
+    Route::get('/workout-sessions', [WorkoutSessionController::class, 'index']);
+    Route::post('/workout-sessions', [WorkoutSessionController::class, 'store']);
 });

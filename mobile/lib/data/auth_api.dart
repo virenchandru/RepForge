@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 class AppUser {
   const AppUser({required this.name, required this.email});
@@ -61,6 +62,90 @@ class WorkoutEntry {
   }
 }
 
+class WorkoutSetPayload {
+  const WorkoutSetPayload({
+    required this.exerciseName,
+    required this.setNumber,
+    required this.reps,
+    this.weightKg,
+  });
+
+  final String exerciseName;
+  final int setNumber;
+  final int reps;
+  final double? weightKg;
+
+  Map<String, dynamic> toJson() => {
+    'exercise_name': exerciseName,
+    'set_number': setNumber,
+    'reps': reps,
+    'weight_kg': weightKg,
+  };
+}
+
+class WorkoutSessionEntry {
+  const WorkoutSessionEntry({
+    required this.exerciseName,
+    required this.setNumber,
+    required this.reps,
+    required this.weightKg,
+  });
+
+  final String exerciseName;
+  final int setNumber;
+  final int reps;
+  final double? weightKg;
+
+  factory WorkoutSessionEntry.fromJson(Map<String, dynamic> json) {
+    final rawWeight = json['weight_kg'];
+    return WorkoutSessionEntry(
+      exerciseName: json['exercise_name'] as String,
+      setNumber: json['set_number'] as int,
+      reps: json['reps'] as int,
+      weightKg: rawWeight == null
+          ? null
+          : rawWeight is num
+          ? rawWeight.toDouble()
+          : double.parse(rawWeight as String),
+    );
+  }
+}
+
+class WorkoutSessionRecord {
+  const WorkoutSessionRecord({
+    required this.id,
+    required this.title,
+    required this.photoUrl,
+    required this.publishedAt,
+    required this.entries,
+  });
+
+  final int id;
+  final String title;
+  final String? photoUrl;
+  final DateTime publishedAt;
+  final List<WorkoutSessionEntry> entries;
+
+  factory WorkoutSessionRecord.fromJson(
+    Map<String, dynamic> json, {
+    required String? photoUrl,
+  }) {
+    final entries = json['entries'] as List<dynamic>? ?? const [];
+    return WorkoutSessionRecord(
+      id: json['id'] as int,
+      title: json['title'] as String,
+      photoUrl: photoUrl,
+      publishedAt: DateTime.parse(json['published_at'] as String),
+      entries: entries
+          .map(
+            (entry) =>
+                WorkoutSessionEntry.fromJson(entry as Map<String, dynamic>),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
 class AuthApiException implements Exception {
   const AuthApiException(this.message);
 
@@ -83,7 +168,7 @@ class AuthApi {
       return configuredUrl.replaceFirst(RegExp(r'/+$'), '');
     }
     return !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-        ? 'http://10.0.2.2:8000/api'
+        ? 'http://127.0.2.1:8000/api'
         : 'http://127.0.0.1:8000/api';
   }
 
@@ -191,6 +276,93 @@ class AuthApi {
     }
 
     return WorkoutEntry.fromJson(entry);
+  }
+
+  Future<WorkoutSessionRecord> publishWorkoutSession({
+    required String token,
+    required String title,
+    required List<WorkoutSetPayload> entries,
+    XFile? photo,
+  }) async {
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$_baseUrl/workout-sessions'))
+          ..headers['Accept'] = 'application/json'
+          ..headers['Authorization'] = 'Bearer $token'
+          ..fields['title'] = title
+          ..fields['entries'] = jsonEncode(
+            entries.map((entry) => entry.toJson()).toList(),
+          );
+
+    if (photo != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'photo',
+          await photo.readAsBytes(),
+          filename: photo.name,
+        ),
+      );
+    }
+
+    final response = await _send(
+      () async => http.Response.fromStream(await _client.send(request)),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_errorMessage(body, response.statusCode));
+    }
+
+    final data = body['data'];
+    if (data is! Map<String, dynamic>) {
+      throw const AuthApiException(
+        'Respons server tidak sesuai. Periksa endpoint workout.',
+      );
+    }
+    return WorkoutSessionRecord.fromJson(
+      data,
+      photoUrl: _photoUrl(data['photo_path'] as String?),
+    );
+  }
+
+  Future<List<WorkoutSessionRecord>> getWorkoutSessions({
+    required String token,
+  }) async {
+    final response = await _send(
+      () => _client.get(
+        Uri.parse('$_baseUrl/workout-sessions'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(_errorMessage(body, response.statusCode));
+    }
+
+    final data = body['data'];
+    if (data is! List<dynamic>) {
+      throw const AuthApiException(
+        'Respons server tidak sesuai. Periksa riwayat workout.',
+      );
+    }
+    return data
+        .map(
+          (session) => WorkoutSessionRecord.fromJson(
+            session as Map<String, dynamic>,
+            photoUrl: _photoUrl(session['photo_path'] as String?),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String? _photoUrl(String? path) {
+    if (path == null || path.isEmpty) return null;
+    final uri = Uri.tryParse(path);
+    if (uri != null && uri.hasScheme) return path;
+
+    final segments = path.split('/').map(Uri.encodeComponent).join('/');
+    return Uri.parse(_baseUrl).replace(path: '/storage/$segments').toString();
   }
 
   Future<http.Response> _send(Future<http.Response> Function() request) async {
