@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'data/auth_api.dart';
 import 'screens/auth_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/app_shell.dart';
 
 const _ink = Color(0xFF171A17);
 const _paper = Color(0xFFF6F5F0);
@@ -43,26 +44,38 @@ class _RepForgeAppState extends State<RepForgeApp> {
     });
   }
 
-  Future<WorkoutEntry> _onWorkoutLogged({
-    required String exerciseName,
-    required int sets,
-    required int reps,
-    double? weightKg,
+  Future<WorkoutSessionRecord> _onWorkoutPublished({
+    required String title,
+    required List<WorkoutSetPayload> entries,
+    XFile? photo,
   }) {
     final token = _token;
     if (token == null) {
       return Future.error(
-        const AuthApiException('Sesi berakhir. Masuk kembali untuk mencatat.'),
+        const AuthApiException(
+          'Sesi berakhir. Masuk kembali untuk memublikasikan.',
+        ),
       );
     }
 
-    return _authApi.createWorkoutEntry(
+    return _authApi.publishWorkoutSession(
       token: token,
-      exerciseName: exerciseName,
-      sets: sets,
-      reps: reps,
-      weightKg: weightKg,
+      title: title,
+      entries: entries,
+      photo: photo,
     );
+  }
+
+  Future<List<WorkoutSessionRecord>> _onLoadWorkoutHistory() {
+    final token = _token;
+    if (token == null) {
+      return Future.error(
+        const AuthApiException(
+          'Sesi berakhir. Masuk kembali untuk melihat riwayat.',
+        ),
+      );
+    }
+    return _authApi.getWorkoutSessions(token: token);
   }
 
   @override
@@ -111,10 +124,11 @@ class _RepForgeAppState extends State<RepForgeApp> {
       ),
       home: _user == null
           ? AuthScreen(api: _authApi, onAuthenticated: _onAuthenticated)
-          : HomeScreen(
+          : AppShell(
               user: _user!,
               onLogout: _onLogout,
-              onWorkoutLogged: _onWorkoutLogged,
+              onPublishWorkout: _onWorkoutPublished,
+              onLoadWorkoutHistory: _onLoadWorkoutHistory,
             ),
     );
   }

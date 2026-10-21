@@ -24,6 +24,11 @@ class User extends Authenticatable
         return $this->hasMany(WorkoutEntry::class);
     }
 
+    public function workoutSessions(): HasMany
+    {
+        return $this->hasMany(WorkoutSession::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *
