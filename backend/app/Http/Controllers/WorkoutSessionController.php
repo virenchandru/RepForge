@@ -24,6 +24,52 @@ class WorkoutSessionController extends Controller
         ]);
     }
 
+    public function previousPerformance(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'exercise_name' => ['required', 'string', 'max:120'],
+        ]);
+        $exerciseName = $validated['exercise_name'];
+        $userId = $request->user()->id;
+
+        $session = $request->user()
+            ->workoutSessions()
+            ->whereNotNull('published_at')
+            ->whereHas(
+                'entries',
+                fn ($query) => $query
+                    ->where('user_id', $userId)
+                    ->where('exercise_name', $exerciseName),
+            )
+            ->with([
+                'entries' => fn ($query) => $query
+                    ->where('user_id', $userId)
+                    ->where('exercise_name', $exerciseName)
+                    ->reorder('set_number')
+                    ->orderBy('id'),
+            ])
+            ->orderByDesc('published_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($session === null) {
+            return response()->json(['data' => null]);
+        }
+
+        return response()->json([
+            'data' => [
+                'title' => $session->title,
+                'published_at' => $session->published_at->toISOString(),
+                'entries' => $session->entries->map(fn ($entry) => [
+                    'exercise_name' => $entry->exercise_name,
+                    'set_number' => $entry->set_number,
+                    'reps' => $entry->reps,
+                    'weight_kg' => $entry->weight_kg,
+                ])->values(),
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $entries = $request->input('entries');

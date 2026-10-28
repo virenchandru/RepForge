@@ -8,6 +8,69 @@ import 'package:repforge_mobile/data/auth_api.dart';
 void main() {
   group('AuthApi workout sessions', () {
     test(
+      'loads only the latest previous performance for one exercise',
+      () async {
+        late http.Request request;
+        final api = AuthApi(
+          client: MockClient((incoming) async {
+            request = incoming;
+            return http.Response(
+              jsonEncode({
+                'data': {
+                  'title': 'Leg day',
+                  'published_at': '2026-10-20T06:00:00.000000Z',
+                  'entries': [
+                    {
+                      'exercise_name': 'Squat',
+                      'set_number': 1,
+                      'reps': 8,
+                      'weight_kg': '40.00',
+                    },
+                    {
+                      'exercise_name': 'Squat',
+                      'set_number': 2,
+                      'reps': 6,
+                      'weight_kg': null,
+                    },
+                  ],
+                },
+              }),
+              200,
+            );
+          }),
+        );
+
+        final performance = await api.getPreviousPerformance(
+          token: 'access-token',
+          exerciseName: 'Squat',
+        );
+
+        expect(request.url.path, '/api/workout-sessions/previous-performance');
+        expect(request.url.queryParameters['exercise_name'], 'Squat');
+        expect(request.headers['Authorization'], 'Bearer access-token');
+        expect(performance?.title, 'Leg day');
+        expect(performance?.entries, hasLength(2));
+        expect(performance?.entries.last.weightKg, isNull);
+      },
+    );
+
+    test('returns null when the user has no previous performance', () async {
+      final api = AuthApi(
+        client: MockClient(
+          (_) async => http.Response(jsonEncode({'data': null}), 200),
+        ),
+      );
+
+      expect(
+        await api.getPreviousPerformance(
+          token: 'access-token',
+          exerciseName: 'Plank',
+        ),
+        isNull,
+      );
+    });
+
+    test(
       'publishes title and independent set entries as multipart data',
       () async {
         late http.Request request;
