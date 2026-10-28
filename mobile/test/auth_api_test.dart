@@ -111,5 +111,49 @@ void main() {
       expect(request.url.path, '/api/logout');
       expect(request.headers['Authorization'], 'Bearer access-token');
     });
+
+    test(
+      'restores the authenticated user with the saved Sanctum token',
+      () async {
+        late http.Request request;
+        final api = AuthApi(
+          client: MockClient((incoming) async {
+            request = incoming;
+            return http.Response(
+              jsonEncode({'name': 'Viren', 'email': 'viren@example.com'}),
+              200,
+            );
+          }),
+        );
+
+        final user = await api.getCurrentUser(token: 'access-token');
+
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/user');
+        expect(request.headers['Authorization'], 'Bearer access-token');
+        expect(user.name, 'Viren');
+        expect(user.email, 'viren@example.com');
+      },
+    );
+
+    test('marks rejected tokens as unauthenticated', () async {
+      final api = AuthApi(
+        client: MockClient(
+          (_) async =>
+              http.Response(jsonEncode({'message': 'Unauthenticated.'}), 401),
+        ),
+      );
+
+      expect(
+        () => api.getCurrentUser(token: 'expired-token'),
+        throwsA(
+          isA<AuthApiException>().having(
+            (error) => error.isUnauthenticated,
+            'isUnauthenticated',
+            isTrue,
+          ),
+        ),
+      );
+    });
   });
 }

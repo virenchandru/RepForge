@@ -14,7 +14,7 @@ class AuthScreen extends StatefulWidget {
   });
 
   final AuthApi api;
-  final void Function(AppUser user, String token) onAuthenticated;
+  final Future<void> Function(AppUser user, String token) onAuthenticated;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -58,7 +58,7 @@ class _AuthScreenState extends State<AuthScreen> {
               password: _passwordController.text,
             );
       if (!mounted) return;
-      widget.onAuthenticated(result.user, result.token);
+      await widget.onAuthenticated(result.user, result.token);
     } on AuthApiException catch (error) {
       if (mounted) setState(() => _errorMessage = error.message);
     } finally {

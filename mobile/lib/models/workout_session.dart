@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 class WorkoutSet {
@@ -7,7 +9,10 @@ class WorkoutSet {
   int number;
   String reps = '';
   String weightKg = '';
+  bool isCompleted = false;
 }
+
+enum RestTimerStatus { idle, running, paused, completed, skipped }
 
 class SessionExercise {
   SessionExercise({required this.id, required this.name, required int setId})
@@ -16,6 +21,95 @@ class SessionExercise {
   final int id;
   final String name;
   final List<WorkoutSet> sets;
+  Duration restDuration = const Duration(seconds: 90);
+  VoidCallback? onRestTimerChanged;
+
+  Timer? _restTimer;
+  DateTime? _restDeadline;
+  Duration? _pausedRemaining;
+  RestTimerStatus _restTimerStatus = RestTimerStatus.idle;
+
+  RestTimerStatus get restTimerStatus => _restTimerStatus;
+
+  Duration get restTimeRemaining {
+    if (_restTimerStatus == RestTimerStatus.paused) {
+      return _pausedRemaining ?? Duration.zero;
+    }
+    if (_restTimerStatus != RestTimerStatus.running) return Duration.zero;
+    final remaining = _restDeadline!.difference(DateTime.now());
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  void _startRestTimer() {
+    _cancelRestTimer();
+    if (restDuration <= Duration.zero) {
+      _restTimerStatus = RestTimerStatus.skipped;
+      return;
+    }
+    _restTimerStatus = RestTimerStatus.running;
+    _restDeadline = DateTime.now().add(restDuration);
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      refreshRestTimer();
+      onRestTimerChanged?.call();
+    });
+  }
+
+  void pauseRestTimer() {
+    if (_restTimerStatus != RestTimerStatus.running) return;
+    _pausedRemaining = restTimeRemaining;
+    _cancelRestTimer();
+    _restDeadline = null;
+    _restTimerStatus = _pausedRemaining == Duration.zero
+        ? RestTimerStatus.completed
+        : RestTimerStatus.paused;
+  }
+
+  void resumeRestTimer() {
+    if (_restTimerStatus != RestTimerStatus.paused) return;
+    final remaining = _pausedRemaining ?? Duration.zero;
+    if (remaining == Duration.zero) {
+      _restTimerStatus = RestTimerStatus.completed;
+      return;
+    }
+    _restDeadline = DateTime.now().add(remaining);
+    _pausedRemaining = null;
+    _restTimerStatus = RestTimerStatus.running;
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      refreshRestTimer();
+      onRestTimerChanged?.call();
+    });
+  }
+
+  void skipRestTimer() {
+    if (_restTimerStatus != RestTimerStatus.running &&
+        _restTimerStatus != RestTimerStatus.paused) {
+      return;
+    }
+    _cancelRestTimer();
+    _restDeadline = null;
+    _pausedRemaining = null;
+    _restTimerStatus = RestTimerStatus.skipped;
+  }
+
+  void refreshRestTimer() {
+    if (_restTimerStatus != RestTimerStatus.running ||
+        restTimeRemaining > Duration.zero) {
+      return;
+    }
+    _cancelRestTimer();
+    _restDeadline = null;
+    _restTimerStatus = RestTimerStatus.completed;
+  }
+
+  void _cancelRestTimer() {
+    _restTimer?.cancel();
+    _restTimer = null;
+  }
+
+  void dispose() {
+    _cancelRestTimer();
+    onRestTimerChanged = null;
+  }
 
   WorkoutSet addSet(int id) {
     final set = WorkoutSet(id: id, number: sets.length + 1);
@@ -56,6 +150,7 @@ class WorkoutSession extends ChangeNotifier {
       name: normalizedName,
       setId: _nextSetId++,
     );
+    exercise.onRestTimerChanged = notifyListeners;
     exercises.add(exercise);
     notifyListeners();
     return exercise;
@@ -81,10 +176,69 @@ class WorkoutSession extends ChangeNotifier {
 
   bool get hasUnsavedSets => !isEmpty;
 
+  bool setCompleted(
+    SessionExercise exercise,
+    WorkoutSet set,
+    bool isCompleted,
+  ) {
+    if (!exercises.contains(exercise) ||
+        !exercise.sets.contains(set) ||
+        set.isCompleted == isCompleted) {
+      return false;
+    }
+    set.isCompleted = isCompleted;
+    if (isCompleted) exercise._startRestTimer();
+    notifyListeners();
+    return true;
+  }
+
+  void setRestDuration(SessionExercise exercise, Duration duration) {
+    if (!exercises.contains(exercise) ||
+        duration.isNegative ||
+        duration > const Duration(minutes: 59, seconds: 59)) {
+      return;
+    }
+    exercise.restDuration = duration;
+    notifyListeners();
+  }
+
+  void pauseRestTimer(SessionExercise exercise) {
+    exercise.pauseRestTimer();
+    notifyListeners();
+  }
+
+  void resumeRestTimer(SessionExercise exercise) {
+    exercise.resumeRestTimer();
+    notifyListeners();
+  }
+
+  void skipRestTimer(SessionExercise exercise) {
+    exercise.skipRestTimer();
+    notifyListeners();
+  }
+
+  void refreshRestTimers() {
+    for (final exercise in exercises) {
+      exercise.refreshRestTimer();
+    }
+    notifyListeners();
+  }
+
   void reset() {
+    for (final exercise in exercises) {
+      exercise.dispose();
+    }
     exercises.clear();
     _nextExerciseId = 0;
     _nextSetId = 0;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    for (final exercise in exercises) {
+      exercise.dispose();
+    }
+    super.dispose();
   }
 }

@@ -5,6 +5,7 @@ import '../data/auth_api.dart';
 import '../models/workout_session.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
+import 'workout_history_detail_screen.dart';
 import 'workout_session_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -13,6 +14,7 @@ class AppShell extends StatefulWidget {
     required this.onLogout,
     required this.onPublishWorkout,
     required this.onLoadWorkoutHistory,
+    required this.onLoadPreviousPerformance,
     super.key,
   });
 
@@ -25,6 +27,8 @@ class AppShell extends StatefulWidget {
   })
   onPublishWorkout;
   final Future<List<WorkoutSessionRecord>> Function() onLoadWorkoutHistory;
+  final Future<PreviousPerformance?> Function({required String exerciseName})
+  onLoadPreviousPerformance;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -82,6 +86,7 @@ class _AppShellState extends State<AppShell> {
         session: _session,
         onPublish: widget.onPublishWorkout,
         onWorkoutPublished: _onWorkoutPublished,
+        onLoadPreviousPerformance: widget.onLoadPreviousPerformance,
       ),
       _HistoryScreen(
         key: _historyKey,
@@ -215,8 +220,16 @@ class _HistoryScreenState extends State<_HistoryScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                       itemCount: sessions.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) =>
-                          _WorkoutHistoryCard(session: sessions[index]),
+                      itemBuilder: (context, index) => _WorkoutHistoryCard(
+                        session: sessions[index],
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => WorkoutHistoryDetailScreen(
+                              session: sessions[index],
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
           ),
@@ -257,88 +270,50 @@ class _HistoryError extends StatelessWidget {
 }
 
 class _WorkoutHistoryCard extends StatelessWidget {
-  const _WorkoutHistoryCard({required this.session});
+  const _WorkoutHistoryCard({required this.session, required this.onTap});
 
   final WorkoutSessionRecord session;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final exercises = session.entries
-        .map((entry) => entry.exerciseName)
-        .toSet()
-        .toList();
     return Card(
       clipBehavior: Clip.antiAlias,
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (session.photoUrl != null)
-            Image.network(
-              session.photoUrl!,
-              height: 190,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, progress) => progress == null
-                  ? child
-                  : const SizedBox(
-                      height: 190,
-                      child: Center(child: CircularProgressIndicator()),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      session.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-              errorBuilder: (_, _, _) => const SizedBox(
-                height: 100,
-                child: Center(child: Icon(Icons.broken_image_outlined)),
+                    const SizedBox(height: 5),
+                    Text(
+                      MaterialLocalizations.of(
+                        context,
+                      ).formatMediumDate(session.publishedAt.toLocal()),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  session.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF171A17),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '${session.publishedAt.toLocal().toString().substring(0, 16)}'
-                  ' · ${session.entries.length} sets',
-                  style: const TextStyle(color: Color(0xFF777A73)),
-                ),
-                const SizedBox(height: 10),
-                for (final exercise in exercises) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      exercise,
-                      style: const TextStyle(
-                        color: Color(0xFF171A17),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  for (final entry in session.entries.where(
-                    (entry) => entry.exerciseName == exercise,
-                  ))
-                    Padding(
-                      padding: const EdgeInsets.only(left: 10, top: 3),
-                      child: Text(
-                        'Set ${entry.setNumber}: ${entry.reps} reps'
-                        '${entry.weightKg == null ? '' : ' · ${entry.weightKg} kg'}',
-                        style: const TextStyle(
-                          color: Color(0xFF777A73),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                ],
-              ],
-            ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

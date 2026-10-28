@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -61,6 +62,7 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $request->user()?->currentAccessToken()?->delete();
+        Auth::guard('sanctum')->forgetUser();
 
         return response()->json([
             'message' => 'Logout successful',

@@ -146,10 +146,38 @@ class WorkoutSessionRecord {
   }
 }
 
+class PreviousPerformance {
+  const PreviousPerformance({
+    required this.title,
+    required this.publishedAt,
+    required this.entries,
+  });
+
+  final String title;
+  final DateTime publishedAt;
+  final List<WorkoutSessionEntry> entries;
+
+  factory PreviousPerformance.fromJson(Map<String, dynamic> json) {
+    final entries = json['entries'] as List<dynamic>? ?? const [];
+    return PreviousPerformance(
+      title: json['title'] as String,
+      publishedAt: DateTime.parse(json['published_at'] as String),
+      entries: entries
+          .map(
+            (entry) =>
+                WorkoutSessionEntry.fromJson(entry as Map<String, dynamic>),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
 class AuthApiException implements Exception {
-  const AuthApiException(this.message);
+  const AuthApiException(this.message, {this.statusCode});
 
   final String message;
+  final int? statusCode;
+  bool get isUnauthenticated => statusCode == 401;
 
   @override
   String toString() => message;
@@ -206,7 +234,10 @@ class AuthApi {
     final body = _decodeBody(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(_errorMessage(body, response.statusCode));
+      throw AuthApiException(
+        _errorMessage(body, response.statusCode),
+        statusCode: response.statusCode,
+      );
     }
 
     final data = body['data'] as Map<String, dynamic>?;
@@ -221,19 +252,40 @@ class AuthApi {
     return AuthResult(user: AppUser.fromJson(user), token: token);
   }
 
+  Future<AppUser> getCurrentUser({required String token}) async {
+    final response = await _send(
+      () => _client.get(
+        Uri.parse('$_baseUrl/user'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': _bearerToken(token),
+        },
+      ),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(
+        _errorMessage(body, response.statusCode),
+        statusCode: response.statusCode,
+      );
+    }
+    return AppUser.fromJson(body);
+  }
+
   Future<void> logout(String token) async {
     final response = await _send(
       () => _client.post(
         Uri.parse('$_baseUrl/logout'),
         headers: {
           'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': _bearerToken(token),
         },
       ),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(
         _errorMessage(_decodeBody(response), response.statusCode),
+        statusCode: response.statusCode,
       );
     }
   }
@@ -257,7 +309,7 @@ class AuthApi {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': _bearerToken(token),
         },
         body: jsonEncode(payload),
       ),
@@ -265,7 +317,10 @@ class AuthApi {
     final body = _decodeBody(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(_errorMessage(body, response.statusCode));
+      throw AuthApiException(
+        _errorMessage(body, response.statusCode),
+        statusCode: response.statusCode,
+      );
     }
 
     final entry = body['data'];
@@ -287,7 +342,7 @@ class AuthApi {
     final request =
         http.MultipartRequest('POST', Uri.parse('$_baseUrl/workout-sessions'))
           ..headers['Accept'] = 'application/json'
-          ..headers['Authorization'] = 'Bearer $token'
+          ..headers['Authorization'] = _bearerToken(token)
           ..fields['title'] = title
           ..fields['entries'] = jsonEncode(
             entries.map((entry) => entry.toJson()).toList(),
@@ -308,7 +363,10 @@ class AuthApi {
     );
     final body = _decodeBody(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(_errorMessage(body, response.statusCode));
+      throw AuthApiException(
+        _errorMessage(body, response.statusCode),
+        statusCode: response.statusCode,
+      );
     }
 
     final data = body['data'];
@@ -331,13 +389,16 @@ class AuthApi {
         Uri.parse('$_baseUrl/workout-sessions'),
         headers: {
           'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': _bearerToken(token),
         },
       ),
     );
     final body = _decodeBody(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(_errorMessage(body, response.statusCode));
+      throw AuthApiException(
+        _errorMessage(body, response.statusCode),
+        statusCode: response.statusCode,
+      );
     }
 
     final data = body['data'];
@@ -356,6 +417,40 @@ class AuthApi {
         .toList(growable: false);
   }
 
+  Future<PreviousPerformance?> getPreviousPerformance({
+    required String token,
+    required String exerciseName,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/workout-sessions/previous-performance',
+    ).replace(queryParameters: {'exercise_name': exerciseName});
+    final response = await _send(
+      () => _client.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': _bearerToken(token),
+        },
+      ),
+    );
+    final body = _decodeBody(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AuthApiException(
+        _errorMessage(body, response.statusCode),
+        statusCode: response.statusCode,
+      );
+    }
+
+    final data = body['data'];
+    if (data == null) return null;
+    if (data is! Map<String, dynamic>) {
+      throw const AuthApiException(
+        'Respons server tidak sesuai. Periksa performa sebelumnya.',
+      );
+    }
+    return PreviousPerformance.fromJson(data);
+  }
+
   String? _photoUrl(String? path) {
     if (path == null || path.isEmpty) return null;
     final uri = Uri.tryParse(path);
@@ -364,6 +459,8 @@ class AuthApi {
     final segments = path.split('/').map(Uri.encodeComponent).join('/');
     return Uri.parse(_baseUrl).replace(path: '/storage/$segments').toString();
   }
+
+  String _bearerToken(String token) => 'Bearer $token';
 
   Future<http.Response> _send(Future<http.Response> Function() request) async {
     try {
