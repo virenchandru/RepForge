@@ -92,7 +92,11 @@ class _AppShellState extends State<AppShell> {
         key: _historyKey,
         loadHistory: widget.onLoadWorkoutHistory,
       ),
-      ProfileScreen(user: widget.user, onLogout: widget.onLogout),
+      ProfileScreen(
+        user: widget.user,
+        onLogout: widget.onLogout,
+        loadWorkoutHistory: widget.onLoadWorkoutHistory,
+      ),
     ];
 
     return Scaffold(
