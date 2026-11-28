@@ -107,7 +107,10 @@ void main() {
     await tester.pump();
     expect(tokenStore.token, 'saved-access-token');
 
+    await tester.scrollUntilVisible(find.text('Keluar dari akun'), 400);
     await tester.tap(find.text('Keluar dari akun'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Log out'));
     await tester.pumpAndSettle();
     expect(tokenStore.token, isNull);
     expect(find.byType(AuthScreen), findsOneWidget);

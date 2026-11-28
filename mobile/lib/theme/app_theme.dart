@@ -60,10 +60,7 @@ abstract final class AppTheme {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 17,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors._surfaceBorder),
@@ -90,6 +87,85 @@ abstract final class AppTheme {
         final color = states.contains(WidgetState.selected)
             ? AppColors.deepBrick
             : AppColors.charcoalBrown;
+        return IconThemeData(color: color);
+      }),
+    ),
+  );
+
+  static final ThemeData dark = light.copyWith(
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: const Color(0xFF111315),
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFFFF8150),
+      onPrimary: Color(0xFF24130D),
+      secondary: Color(0xFFFFA078),
+      onSecondary: Color(0xFF24130D),
+      surface: Color(0xFF191C1F),
+      onSurface: Color(0xFFF1F2F3),
+      error: Color(0xFFFFB4AB),
+      onError: Color(0xFF690005),
+    ),
+    textTheme: const TextTheme().apply(
+      bodyColor: Color(0xFFF1F2F3),
+      displayColor: Color(0xFFF1F2F3),
+      fontFamily: 'Roboto',
+    ),
+    cardTheme: CardThemeData(
+      color: const Color(0xFF191C1F),
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFF303438)),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFFF8150),
+        foregroundColor: const Color(0xFF24130D),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8150)),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFFF1F2F3),
+        side: const BorderSide(color: Color(0xFF383D41)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: const Color(0xFF222629),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF383D41)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF383D41)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFFF8150), width: 1.5),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: const Color(0xFF191C1F),
+      indicatorColor: const Color(0xFFFF8150).withValues(alpha: 0.18),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) {
+        final color = states.contains(WidgetState.selected)
+            ? const Color(0xFFFF8150)
+            : const Color(0xFFB7BBC0);
+        return TextStyle(color: color, fontWeight: FontWeight.w600);
+      }),
+      iconTheme: WidgetStateProperty.resolveWith((states) {
+        final color = states.contains(WidgetState.selected)
+            ? const Color(0xFFFF8150)
+            : const Color(0xFFB7BBC0);
         return IconThemeData(color: color);
       }),
     ),

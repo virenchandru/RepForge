@@ -69,11 +69,5 @@ class AuthController extends Controller
         ]);
     }
 
-    public function users(): JsonResponse
-    {
-        return response()->json([
-            'message' => 'Users found',
-            'data' => User::latest()->get(),
-        ]);
-    }
+    
 }
