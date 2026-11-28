@@ -31,6 +31,7 @@ class _RepForgeAppState extends State<RepForgeApp> {
   AppUser? _user;
   String? _token;
   bool _isRestoringSession = true;
+  bool _isDarkMode = false;
   String? _restoreError;
 
   @override
@@ -217,6 +218,8 @@ class _RepForgeAppState extends State<RepForgeApp> {
       title: 'RepForge',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: _isRestoringSession
           ? const _SessionLoadingScreen()
           : _restoreError != null
@@ -229,6 +232,9 @@ class _RepForgeAppState extends State<RepForgeApp> {
           : AppShell(
               user: _user!,
               onLogout: _onLogout,
+              isDarkMode: _isDarkMode,
+              onThemeChanged: (isDarkMode) =>
+                  setState(() => _isDarkMode = isDarkMode),
               onPublishWorkout: _onWorkoutPublished,
               onLoadWorkoutHistory: _onLoadWorkoutHistory,
               onLoadPreviousPerformance: _onLoadPreviousPerformance,

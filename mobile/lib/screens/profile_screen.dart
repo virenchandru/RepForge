@@ -3,18 +3,28 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../data/auth_api.dart';
+import '../models/profile_photo.dart';
+import '../widgets/profile_photo_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     required this.user,
     required this.onLogout,
     required this.loadWorkoutHistory,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+    required this.profilePhoto,
+    required this.onProfilePhotoChanged,
     super.key,
   });
 
   final AppUser user;
   final Future<void> Function() onLogout;
   final Future<List<WorkoutSessionRecord>> Function() loadWorkoutHistory;
+  final bool isDarkMode;
+  final ValueChanged<bool> onThemeChanged;
+  final ProfilePhoto? profilePhoto;
+  final ValueChanged<ProfilePhoto> onProfilePhotoChanged;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -23,7 +33,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   late String _name = widget.user.name.trim();
-  Uint8List? _profileImage;
   List<WorkoutSessionRecord>? _sessions;
   String? _statsError;
   bool _isLoadingStats = true;
@@ -93,7 +102,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (image == null) return;
       final bytes = await image.readAsBytes();
       if (!mounted) return;
-      setState(() => _profileImage = bytes);
+      final crop = await showDialog<_PhotoCrop>(
+        context: context,
+        builder: (context) => _PhotoCropDialog(imageBytes: bytes),
+      );
+      if (crop == null || !mounted) return;
+      widget.onProfilePhotoChanged(
+        ProfilePhoto(bytes: bytes, scale: crop.scale, offset: crop.offset),
+      );
       _showMessage(
         'Profile picture updated for this session. It is not synced to your account.',
       );
@@ -116,7 +132,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB63D1F),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             child: const Text('Log out'),
           ),
@@ -161,17 +178,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final sessions = _sessions;
     final showVolume =
         !_isLoadingStats && _statsError == null && _trainingVolumeKg != null;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 18, 22, 32),
           children: [
-            const Text(
+            Text(
               'Profile',
               style: TextStyle(
-                color: Color(0xFF191B1D),
+                color: colors.onSurface,
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
@@ -181,7 +199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _ProfileHeader(
               name: _name.isEmpty ? 'RepForge athlete' : _name,
               email: widget.user.email,
-              imageBytes: _profileImage,
+              profilePhoto: widget.profilePhoto,
               onEdit: _editProfile,
             ),
             const SizedBox(height: 30),
@@ -191,8 +209,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? null
                   : Text(
                       '${sessions.length} total',
-                      style: const TextStyle(
-                        color: Color(0xFF777B80),
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
                         fontSize: 13,
                       ),
                     ),
@@ -231,21 +249,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const _SectionTitle(title: 'Preferences'),
             const SizedBox(height: 9),
             _SettingsTile(
-              icon: Icons.notifications_none_rounded,
-              title: 'Notifications',
-              subtitle: 'Notification controls are not available yet',
-              onTap: () => _showInfo(
-                'Notifications',
-                'Notification preferences are not available in this version.',
-              ),
-            ),
-            _SettingsTile(
-              icon: Icons.light_mode_outlined,
+              icon: widget.isDarkMode
+                  ? Icons.dark_mode_outlined
+                  : Icons.light_mode_outlined,
               title: 'Appearance',
-              subtitle: 'Light theme',
-              onTap: () => _showInfo(
-                'Appearance',
-                'RepForge currently uses the light theme.',
+              subtitle: widget.isDarkMode ? 'Dark theme' : 'Light theme',
+              trailing: Switch.adaptive(
+                value: widget.isDarkMode,
+                activeThumbColor: colors.primary,
+                onChanged: widget.onThemeChanged,
               ),
             ),
             const SizedBox(height: 20),
@@ -266,7 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               subtitle: '1.0.0',
             ),
             const SizedBox(height: 25),
-            const Divider(height: 1, color: Color(0xFFE9EAEC)),
+            Divider(height: 1, color: colors.outlineVariant),
             const SizedBox(height: 17),
             OutlinedButton.icon(
               onPressed: _isLoggingOut ? null : _confirmLogout,
@@ -279,8 +291,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : const Icon(Icons.logout_rounded),
               label: const Text('Keluar dari akun'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFB63D1F),
-                side: const BorderSide(color: Color(0xFFF0D7D0)),
+                foregroundColor: colors.error,
+                side: BorderSide(color: colors.outlineVariant),
                 minimumSize: const Size.fromHeight(52),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -314,37 +326,27 @@ class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.name,
     required this.email,
-    required this.imageBytes,
+    required this.profilePhoto,
     required this.onEdit,
   });
 
   final String name;
   final String email;
-  final Uint8List? imageBytes;
+  final ProfilePhoto? profilePhoto;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
-        CircleAvatar(
-          radius: 48,
-          backgroundColor: const Color(0xFFFFEEE7),
-          backgroundImage: imageBytes == null ? null : MemoryImage(imageBytes!),
-          child: imageBytes == null
-              ? const Icon(
-                  Icons.person_rounded,
-                  size: 48,
-                  color: Color(0xFFDA5A2A),
-                )
-              : null,
-        ),
+        ProfilePhotoAvatar(photo: profilePhoto, radius: 48),
         const SizedBox(height: 13),
         Text(
           name,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF191B1D),
+          style: TextStyle(
+            color: colors.onSurface,
             fontSize: 22,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.3,
@@ -354,14 +356,14 @@ class _ProfileHeader extends StatelessWidget {
         Text(
           email,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFF777B80), fontSize: 14),
+          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 14),
         ),
         const SizedBox(height: 15),
         OutlinedButton(
           onPressed: onEdit,
           style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFFDA5A2A),
-            side: const BorderSide(color: Color(0xFFF0D7D0)),
+            foregroundColor: colors.primary,
+            side: BorderSide(color: colors.outlineVariant),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -372,6 +374,91 @@ class _ProfileHeader extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _PhotoCrop {
+  const _PhotoCrop({required this.scale, required this.offset});
+
+  final double scale;
+  final Offset offset;
+}
+
+class _PhotoCropDialog extends StatefulWidget {
+  const _PhotoCropDialog({required this.imageBytes});
+
+  final Uint8List imageBytes;
+
+  @override
+  State<_PhotoCropDialog> createState() => _PhotoCropDialogState();
+}
+
+class _PhotoCropDialogState extends State<_PhotoCropDialog> {
+  static const _cropSize = 240.0;
+  final TransformationController _controller = TransformationController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _applyCrop() {
+    final transform = _controller.value;
+    Navigator.pop(
+      context,
+      _PhotoCrop(
+        scale: transform.getMaxScaleOnAxis(),
+        offset: Offset(
+          transform.entry(0, 3) / _cropSize,
+          transform.entry(1, 3) / _cropSize,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AlertDialog(
+      title: const Text('Atur foto profil'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Geser untuk mengatur posisi dan cubit untuk memperbesar.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          ClipOval(
+            child: SizedBox(
+              width: _cropSize,
+              height: _cropSize,
+              child: InteractiveViewer(
+                transformationController: _controller,
+                minScale: 1,
+                maxScale: 4,
+                constrained: false,
+                child: SizedBox(
+                  width: _cropSize,
+                  height: _cropSize,
+                  child: Image.memory(widget.imageBytes, fit: BoxFit.cover),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Icon(Icons.zoom_out_map_rounded, color: colors.onSurfaceVariant),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton(onPressed: _applyCrop, child: const Text('Pakai foto')),
       ],
     );
   }
@@ -390,8 +477,8 @@ class _SectionTitle extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              color: Color(0xFF202326),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 17,
               fontWeight: FontWeight.w700,
             ),
@@ -411,6 +498,7 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final stats = [
       _TrainingStat(value: '$workoutCount', label: 'Workouts'),
       _TrainingStat(value: '$workoutCount', label: 'Training sessions'),
@@ -425,19 +513,19 @@ class _StatsRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 17),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F6),
+        color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           for (var index = 0; index < stats.length; index++) ...[
             if (index > 0)
-              const SizedBox(
+              SizedBox(
                 height: 38,
                 child: VerticalDivider(
                   width: 1,
                   thickness: 1,
-                  color: Color(0xFFE5E6E7),
+                  color: colors.outlineVariant,
                 ),
               ),
             Expanded(child: stats[index]),
@@ -461,6 +549,7 @@ class _TrainingStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       children: [
         Row(
@@ -470,8 +559,8 @@ class _TrainingStat extends StatelessWidget {
           children: [
             Text(
               value,
-              style: const TextStyle(
-                color: Color(0xFF1D2022),
+              style: TextStyle(
+                color: colors.onSurface,
                 fontSize: 21,
                 fontWeight: FontWeight.w800,
               ),
@@ -480,8 +569,8 @@ class _TrainingStat extends StatelessWidget {
               const SizedBox(width: 3),
               Text(
                 unit!,
-                style: const TextStyle(
-                  color: Color(0xFF777B80),
+                style: TextStyle(
+                  color: colors.onSurfaceVariant,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
@@ -493,7 +582,7 @@ class _TrainingStat extends StatelessWidget {
         Text(
           label,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFF777B80), fontSize: 11),
+          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
         ),
       ],
     );
@@ -505,7 +594,7 @@ class _StatsLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    return SizedBox(
       height: 88,
       child: Center(
         child: SizedBox(
@@ -513,7 +602,7 @@ class _StatsLoading extends StatelessWidget {
           height: 22,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: Color(0xFFDA5A2A),
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
       ),
@@ -529,20 +618,21 @@ class _StatsError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F6),
+        color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_outlined, color: Color(0xFF777B80)),
+          Icon(Icons.cloud_off_outlined, color: colors.onSurfaceVariant),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: Color(0xFF555A5F), fontSize: 13),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
             ),
           ),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -558,45 +648,50 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.onTap,
+    this.trailing,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       leading: Container(
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: const Color(0xFFF7F7F6),
+          color: colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 20, color: const Color(0xFF575C61)),
+        child: Icon(icon, size: 20, color: colors.onSurfaceVariant),
       ),
       title: Text(
         title,
-        style: const TextStyle(
-          color: Color(0xFF25282B),
+        style: TextStyle(
+          color: colors.onSurface,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(color: Color(0xFF85898E), fontSize: 12),
+        style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
       ),
-      trailing: onTap == null
-          ? null
-          : const Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: Color(0xFF9A9DA1),
-            ),
+      trailing:
+          trailing ??
+          (onTap == null
+              ? null
+              : Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: colors.onSurfaceVariant,
+                )),
       onTap: onTap,
     );
   }

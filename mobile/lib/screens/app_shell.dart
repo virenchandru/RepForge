@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../data/auth_api.dart';
+import '../models/profile_photo.dart';
 import '../models/workout_session.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
@@ -12,6 +13,8 @@ class AppShell extends StatefulWidget {
   const AppShell({
     required this.user,
     required this.onLogout,
+    this.isDarkMode = false,
+    this.onThemeChanged = _ignoreThemeChange,
     required this.onPublishWorkout,
     required this.onLoadWorkoutHistory,
     required this.onLoadPreviousPerformance,
@@ -20,6 +23,8 @@ class AppShell extends StatefulWidget {
 
   final AppUser user;
   final Future<void> Function() onLogout;
+  final bool isDarkMode;
+  final ValueChanged<bool> onThemeChanged;
   final Future<WorkoutSessionRecord> Function({
     required String title,
     required List<WorkoutSetPayload> entries,
@@ -34,9 +39,13 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
+void _ignoreThemeChange(bool _) {}
+
 class _AppShellState extends State<AppShell> {
   final WorkoutSession _session = WorkoutSession();
+  final _homeKey = GlobalKey<HomeScreenState>();
   final _historyKey = GlobalKey<_HistoryScreenState>();
+  ProfilePhoto? _profilePhoto;
   int _selectedIndex = 0;
 
   @override
@@ -76,12 +85,25 @@ class _AppShellState extends State<AppShell> {
   void _onWorkoutPublished() {
     setState(() => _selectedIndex = 2);
     _historyKey.currentState?.load();
+    _homeKey.currentState?.refresh();
+  }
+
+  void _onProfilePhotoChanged(ProfilePhoto photo) {
+    setState(() => _profilePhoto = photo);
   }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeScreen(user: widget.user, onAddWorkout: _startWorkout),
+      HomeScreen(
+        key: _homeKey,
+        user: widget.user,
+        profilePhoto: _profilePhoto,
+        onAddWorkout: _startWorkout,
+        onOpenProfile: () => setState(() => _selectedIndex = 3),
+        onSeeAll: () => setState(() => _selectedIndex = 2),
+        loadWorkoutHistory: widget.onLoadWorkoutHistory,
+      ),
       WorkoutSessionScreen(
         session: _session,
         onPublish: widget.onPublishWorkout,
@@ -94,7 +116,11 @@ class _AppShellState extends State<AppShell> {
       ),
       ProfileScreen(
         user: widget.user,
+        profilePhoto: _profilePhoto,
+        onProfilePhotoChanged: _onProfilePhotoChanged,
         onLogout: widget.onLogout,
+        isDarkMode: widget.isDarkMode,
+        onThemeChanged: widget.onThemeChanged,
         loadWorkoutHistory: widget.onLoadWorkoutHistory,
       ),
     ];
